@@ -1,0 +1,10 @@
+2023-07-22T17:03:42+00:00 CRITICAL Uncaught ArgumentCountError: Too few arguments to function get_products_data(), 0 passed in /Applications/XAMPP/xamppfiles/htdocs/WooCommerce-Plugin/wp-content/plugins/products-update-plugin/products-update-plugin.php on line 97 and exactly 1 expected in /Applications/XAMPP/xamppfiles/htdocs/WooCommerce-Plugin/wp-content/plugins/products-update-plugin/products-update-plugin.php:154
+Stack trace:
+#0 /Applications/XAMPP/xamppfiles/htdocs/WooCommerce-Plugin/wp-content/plugins/products-update-plugin/products-update-plugin.php(97): get_products_data()
+#1 /Applications/XAMPP/xamppfiles/htdocs/WooCommerce-Plugin/wp-includes/class-wp-hook.php(308): sync_products_with_supplier()
+#2 /Applications/XAMPP/xamppfiles/htdocs/WooCommerce-Plugin/wp-includes/class-wp-hook.php(332): WP_Hook->apply_filters('', Array)
+#3 /Applications/XAMPP/xamppfiles/htdocs/WooCommerce-Plugin/wp-includes/plugin.php(565): WP_Hook->do_action(Array)
+#4 /Applications/XAMPP/xamppfiles/htdocs/WooCommerce-Plugin/wp-cron.php(188): do_action_ref_array('sync_products_e...', Array)
+#5 {main}
+  thrown in /Applications/XAMPP/xamppfiles/htdocs/WooCommerce-Plugin/wp-content/plugins/products-update-plugin/products-update-plugin.php on line 154
+
