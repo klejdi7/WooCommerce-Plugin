@@ -1,5 +1,6 @@
 <?php
 
+use Automattic\WooCommerce\Admin\API\Products;
 use WC_Product_Simple;
 
 /**
@@ -97,88 +98,25 @@ function run_products_update_plugin() {
 // }
 
 // // Hook into that action that'll fire every three minutes
-// add_action( 'isa_add_every_three_minutes', 'get_products_data' );
+// add_action( 'isa_add_every_three_minutes', 'syncProducts' );
 // function every_three_minutes_event_func() {
 // 	print_r("3 minutes");die();
 // }
 
-// Hook the function to a scheduled event (once a day) using WordPress Cron or ActionScheduler
-// Example using WordPress Cron
-function schedule_sync_products() {
-	if (!wp_next_scheduled('sync_products_event')) {
-		wp_schedule_event(time(), 'daily', 'sync_products_event');
-	}
-}
-add_action('init', 'schedule_sync_products');
 
-// Hook the sync_products_with_supplier function to the scheduled event
-add_action('sync_products_event', 'sync_products_with_supplier');
-
-function sync_products_with_supplier() {
-	// Retrieve data from the supplier API using Postman collection or any other method
-	$supplier_data = get_products_data(); // Replace this with the function that fetches the supplier data
-
-	if (!$supplier_data) {
-		log_sync_activity('Failed to fetch supplier data.');
-		return;
-	}
-
-	// Convert the JSON data to an array (assuming the data is in JSON format)
-	$products = $supplier_data;
-
-	if (!$products || !is_array($products)) {
-		log_sync_activity('Error: Invalid supplier data format.');
-		return;
-	}
-
-	foreach ($products as $product_data) {
-		// Extract necessary product information from the supplier data
-		$product_id = isset($product_data['id']) ? $product_data['id'] : 0;
-		$product_name = isset($product_data['name']) ? $product_data['name'] : '';
-		$product_price = isset($product_data['price']) ? $product_data['price'] : 0.00;
-		$product_description = isset($product_data['description']) ? $product_data['description'] : '';
-
-		// Check if the product already exists in WooCommerce based on a unique identifier (e.g., product_id)
-		$existing_product = get_product_by_unique_identifier($product_id);
-
-		if ($existing_product) {
-			// Product already exists, update it
-			$existing_product->set_name($product_name);
-			$existing_product->set_price($product_price);
-			$existing_product->set_description($product_description);
-			// Set other product data if needed (e.g., images, categories, attributes)
-
-			// Save the updated product
-			$existing_product->save();
-
-			log_sync_activity('Updated product: ' . $product_id . ' - ' . $product_name);
-		} else {
-			// Product does not exist, create a new product
-			$new_product = new WC_Product();
-
-			// Set product data
-			$new_product->set_name($product_name);
-			$new_product->set_price($product_price);
-			$new_product->set_description($product_description);
-			// Set other product data if needed (e.g., images, categories, attributes)
-
-			// Save the new product
-			$new_product->save();
-
-			log_sync_activity('Created new product: ' . $product_id . ' - ' . $product_name);
-		}
-	}
-
-	// Check for products that might have been deleted from the supplier and delete them from WooCommerce
-	cleanup_deleted_products($products);
-}
- 
-function get_products_data() {
+function getBrands() {
 
 	$apiUrl = 'https://dev.dropshippingb2b.com/api/';
 
 	$data = array(
-		'data' => '{"uid": 77651,"pid": 11,"lid": 10,"key": "4AwqQu7BZ1TU1M0sNZUoe284y9jlJbkV3jX1oMnkP00HCZ86b6c54IKl4zp3kM5e","api_version": "1.0.0","request": "get_brand_items", "id_brand":"45","display_attributes":true, "display_discount":true, "display_retail_price":true, "display_id_supplier":false, "display_currency":false, "display_icon_path":false, "display_image_last_update":false}',
+		'data' => '{
+			"uid": 77651,
+			"pid": 11,
+			"lid": 10,
+			"key": "4AwqQu7BZ1TU1M0sNZUoe284y9jlJbkV3jX1oMnkP00HCZ86b6c54IKl4zp3kM5e",
+			"api_version": "1.0.0",
+			"request": "get_brands"
+		  }',
 	);
 
 	$ch = curl_init();
@@ -198,19 +136,207 @@ function get_products_data() {
 	// Close cURL session
 	curl_close($ch);
 
-	$decoded_response = json_decode($response, true);
+	$brands_decoded = json_decode($response, true);
 
-	foreach($decoded_response["rows"] as $prod) newProductAdd($prod);
+	return $brands_decoded;
+	
+}
+
+function syncDeletedProducts($productIDs) {
+	print_r($productIDs);die();
+	// Get all product IDs from WooCommerce
+	// $args = array(
+	// 	'post_type' => 'product',
+	// 	'fields' => 'ids',
+	// 	'posts_per_page' => -1,
+	// 	'meta_key' => '_sku',
+	// 	'meta_compare' => 'EXISTS',
+	// );
+
+	// $woo_product_ids = get_posts($args);
+
+	// // Get the SKUs for the existing products in WooCommerce
+	// $existing_skus = array();
+	// foreach ($woo_product_ids as $product_id) {
+	// 	$existing_skus[] = get_post_meta($product_id, '_sku', true);
+	// }
+
+	// // Identify deleted products (present in WooCommerce but not in the API data)
+	// $deleted_skus = array_diff($existing_skus, $productIDs);
+
+	// // Loop through the deleted product SKUs and delete the corresponding products
+	// foreach ($deleted_skus as $deleted_sku) {
+	// 	$product_id = wc_get_product_id_by_sku($deleted_sku);
+	// 	if ($product_id) {
+	// 		wp_delete_post($product_id, true);
+	// 		echo "Deleted";
+	// 	}
+	// }
+
+	// // Flush rewrite rules to regenerate permalinks after deleting products
+	// flush_rewrite_rules();
+}
+
+function getProductsByBrandID($id){
+	
+	$apiUrl = 'https://dev.dropshippingb2b.com/api/';
+
+	$data = array(
+		'data' => '{
+			"uid": 77651,
+			"pid": 11,
+			"lid": 10,
+			"key": "4AwqQu7BZ1TU1M0sNZUoe284y9jlJbkV3jX1oMnkP00HCZ86b6c54IKl4zp3kM5e",
+			"api_version": "1.0.0",
+			"request": "get_brand_items",
+			"id_brand":'.$id.',
+			"display_attributes":true, 
+			"display_discount":true, 
+			"display_retail_price":true, 
+			"display_id_supplier":false, 
+			"display_currency":false, 
+			"display_icon_path":false, 
+			"display_image_last_update":false
+		}',
+	);
+
+	$ch = curl_init();
+
+	curl_setopt($ch, CURLOPT_URL, $apiUrl);
+	curl_setopt($ch, CURLOPT_POST, 1);
+	curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Set this to true if you have a valid SSL certificate
+
+	$response = curl_exec($ch);
+
+	if (curl_errno($ch)) {
+		echo 'cURL Error: ' . curl_error($ch);
+	}
+
+	// Close cURL session
+	curl_close($ch);
+
+	$products_decoded = json_decode($response, true);
+
+	return $products_decoded;
+}
+
+function addCategory($category_name) {
+	$category_slug = sanitize_title($category_name);
+	$category_args = array(
+		'description' => '',
+		'slug'        => $category_slug,
+	);
+
+	// Check if the category already exists
+	$existing_term = term_exists($category_name, 'product_cat');
+	
+	if (!$existing_term) {
+		$new_category = wp_insert_term($category_name, 'product_cat', $category_args);
+		if (!is_wp_error($new_category)) {
+			return $new_category; // Return the newly added term (term_id, term_taxonomy_id, term_slug)
+		} else {
+			return $new_category->get_error_message();
+		}
+	} else {
+		return 'Category already exists';
+	}
+}
+
+// addCategoryHook("ele");
+function syncCategories() {
+
+	$brands = getBrands();
+
+	add_action('init', function() use ($brands) {
+		foreach ($brands["rows"] as $brand) {
+			// Call the function with the desired category name to add it during initialization
+			addCategory($brand["group"]);
+		}
+	});
 
 }
 
-function newProductAdd($product){
+function syncProducts() {
 
+	$brands = getBrands();
+
+	add_action('init', function() use ($brands) {
+
+
+		foreach($brands["rows"] as $brand) {
+			$productsByBrand = getProductsByBrandID($brand["id_brand"]);
+
+			foreach($productsByBrand["rows"] as $product){
+				$category = term_exists($brand["group"], 'product_cat');
+				if(!checkProductExists($product["id_product"])) newProductAdd($product, $category);
+			}
+				flush_rewrite_rules();
+		}
+
+		// print_r($allProductIDs);die();
+		// syncDeletedProducts($allProductIDs);
+	});
+
+}
+
+// syncProducts(); 
+
+// syncCategories();
+
+function getAllProductIDs($brands){
+
+	// $brands = getBrands();
+	$allProductIDs = array();
+
+	foreach($brands["rows"] as $brand) {
+
+		$productsByBrand = getProductsByBrandID($brand["id_brand"]);
+		// foreach($productsByBrand["rows"] as $product){
+		if($productsByBrand["num_rows"] > 0) $allProductIDs[] = $productsByBrand;
+		// }
+
+	}
+
+	return $allProductIDs;
+}
+
+// $res = getAllProductIDs();
+// print_r($res);die();
+
+function checkProductExists($sku) {
+	$args = array(
+		'post_type' => 'product',
+		'meta_query' => array(
+			array(
+				'key' => '_sku',
+				'value' => $sku,
+				'compare' => '='
+			)
+		),
+		'posts_per_page' => 1,
+		'fields' => 'ids'
+	);
+
+	$product_ids = get_posts($args);
+
+	if (!empty($product_ids)) {
+		return $product_ids[0];
+	}
+
+	return false;
+}
+
+function newProductAdd($product, $category){
+
+	// print_r($category["term_id"]);die();
 	$productTitle = $product["name"];
 	$productDescription = '-';
 	$productPrice = $product["price"];
 	$productSKU = $product["id_product"];
-	$productCategoryIds = array(1);
+	$productCategoryId = array($category["term_id"]);
+	$productSlug = sanitize_title($productTitle);
 	$imageFilePath = $product["image_path"];
 
 	global $wpdb;
@@ -220,6 +346,7 @@ function newProductAdd($product){
 		array(
 			'post_title' => $productTitle,
 			'post_content' => $productDescription,
+			'post_name' => $productSlug,
 			'post_status' => 'publish',
 			'post_type' => 'product',
 		)
@@ -231,7 +358,7 @@ function newProductAdd($product){
 	update_post_meta($productID, '_price', $productPrice);
 	update_post_meta($productID, '_sku', $productSKU);
 
-	wp_set_post_terms($productID, $productCategoryIds, 'product_cat');
+	wp_set_post_terms($productID, $productCategoryId, 'product_cat', true);
 
 	$image_id = insertImageToProduct( $imageFilePath);
 	set_post_thumbnail($productID, $image_id);
@@ -239,6 +366,41 @@ function newProductAdd($product){
 	echo 'Product added directly to the database. Product ID: ' . $productID;
 
 }
+
+// $result = wp_set_post_terms(5910, array(21), 'product_cat', true);
+// Function to delete all products
+function delete_all_products() {
+    $args = array(
+        'post_type' => 'product',
+        'posts_per_page' => -1, // Retrieve all products
+    );
+
+    $products = get_posts($args);
+
+    if ($products) {
+        foreach ($products as $product) {
+            wp_delete_post($product->ID, true); // Force delete to bypass trash
+        }
+
+        echo 'All products have been deleted successfully.';
+    } else {
+        echo 'No products found.';
+    }
+}
+
+// Call the function to delete all products
+// delete_all_products();
+function assign_product_to_category() {
+    $result = wp_set_post_terms(5910, array(21), 'product_cat', true);
+
+    if (!is_wp_error($result)) {
+        echo 'Product has been successfully assigned to the category.';
+    } else {
+        echo 'Error assigning product to category: ' . $result->get_error_message();
+    }
+	die();
+}
+// add_action('init', 'assign_product_to_category');
 
 function insertImageToProduct($image_url) {
 
@@ -290,5 +452,7 @@ log_sync_activity('Product X was synchronized successfully.');
 // get_products_data();
 // insertImageToProduct(2946, 'http://static.emporiorologion.gr/store/1/DIESEL/DZ4204.jpg');
 // set_post_thumbnail(4894, 4912);
+// syncAllProducts();
+
 
 run_products_update_plugin();
