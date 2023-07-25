@@ -82,6 +82,26 @@ function run_products_update_plugin() {
 
 }
 
+// add_filter( 'cron_schedules', 'isa_add_every_three_minutes' );
+// function isa_add_every_three_minutes( $schedules ) {
+//     $schedules['every_three_minutes'] = array(
+//             'interval'  => 10,
+//             'display'   => __( 'Every 3 Minutes', 'textdomain' )
+//     );
+//     return $schedules;
+// }
+
+// // Schedule an action if it's not already scheduled
+// if ( ! wp_next_scheduled( 'isa_add_every_three_minutes' ) ) {
+//     wp_schedule_event( time(), 'every_three_minutes', 'isa_add_every_three_minutes' );
+// }
+
+// // Hook into that action that'll fire every three minutes
+// add_action( 'isa_add_every_three_minutes', 'get_products_data' );
+// function every_three_minutes_event_func() {
+// 	print_r("3 minutes");die();
+// }
+
 // Hook the function to a scheduled event (once a day) using WordPress Cron or ActionScheduler
 // Example using WordPress Cron
 function schedule_sync_products() {
@@ -152,157 +172,102 @@ function sync_products_with_supplier() {
 	// Check for products that might have been deleted from the supplier and delete them from WooCommerce
 	cleanup_deleted_products($products);
 }
-
-// function get_products_data() {
-
-// 	$endpoint = 'https://dev.dropshippingb2b.com/api/';
-
-// 	// Request data
-// 	$data = array(
-// 		"uid" => 77651,
-// 		"pid" => 11,
-// 		"lid" => 10,
-// 		"key" => "4AwqQu7BZ1TU1M0sNZUoe284y9jlJbkV3jX1oMnkP00HCZ86b6c54IKl4zp3kM5e",
-// 		"api_version" => "1.0.0",
-// 		"request" => "get_brand_items",
-// 		"id_brand" => "45",
-// 		"display_attributes" => true,
-// 		"display_discount" => true,
-// 		"display_retail_price" => true,
-// 		"display_id_supplier" => false,
-// 		"display_currency" => false,
-// 		"display_icon_path" => false,
-// 		"display_image_last_update" => false	  
-// 	);
-
-// 	// Prepare the request body
-// 	$body = array(
-// 				'key' => 'data',
-// 				'value' => json_encode($data),
-// 				'type' => 'text'
-// 	);
-
-// 	// API request arguments
-// 	$args = array(
-// 		'method' => 'POST',
-// 		'headers' => array(),
-// 		'body' => $body,
-// 	);
-
-// 	// Make the API request
-// 	// $response = wp_remote_request($endpoint, $args);
-
-// 	$ch = curl_init();
-
-// 	// Set cURL options
-// 	curl_setopt($ch, CURLOPT_URL, $endpoint);
-// 	curl_setopt($ch, CURLOPT_POST, 1);
-// 	curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($args));
-// 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-// 	// Execute cURL session and store the API response
-// 	$response = curl_exec($ch);
-
-// 	// Check for API request errors
-// 	if (is_wp_error($response)) {
-// 		// Handle API request error
-// 		print_R("error");
-// 		return false;
-// 	}
-
-// 	// Get the response body
-// 	$response_body = wp_remote_retrieve_body($response);
-
-// 	// Decode the JSON response
-// 	$decoded_response = json_decode($response_body, true);
-
-// 	print_r($response);
-// 	die();
-// 	// Check if the response was successfully decoded
-// 	if (is_array($decoded_response)) {
-// 		// Process the API response data here
-// 		// You can access the response using $decoded_response variable
-// 		return $decoded_response;
-// 	}
-
-// 	return false;
-// }
-
+ 
 function get_products_data() {
-// API endpoint URL
-$apiUrl = 'https://dev.dropshippingb2b.com/api/';
 
-// Data to send in the POST request (URL-encoded)
-$data = array(
-    'data' => '{"uid": 77651,"pid": 11,"lid": 10,"key": "4AwqQu7BZ1TU1M0sNZUoe284y9jlJbkV3jX1oMnkP00HCZ86b6c54IKl4zp3kM5e","api_version": "1.0.0","request": "get_brand_items", "id_brand":"45","display_attributes":true, "display_discount":true, "display_retail_price":true, "display_id_supplier":false, "display_currency":false, "display_icon_path":false, "display_image_last_update":false}',
-);
+	$apiUrl = 'https://dev.dropshippingb2b.com/api/';
 
-// Initialize cURL session
-$ch = curl_init();
+	$data = array(
+		'data' => '{"uid": 77651,"pid": 11,"lid": 10,"key": "4AwqQu7BZ1TU1M0sNZUoe284y9jlJbkV3jX1oMnkP00HCZ86b6c54IKl4zp3kM5e","api_version": "1.0.0","request": "get_brand_items", "id_brand":"45","display_attributes":true, "display_discount":true, "display_retail_price":true, "display_id_supplier":false, "display_currency":false, "display_icon_path":false, "display_image_last_update":false}',
+	);
 
-// Set cURL options
-curl_setopt($ch, CURLOPT_URL, $apiUrl);
-curl_setopt($ch, CURLOPT_POST, 1);
-curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Set this to true if you have a valid SSL certificate
+	$ch = curl_init();
 
-// Execute cURL session and store the API response
-$response = curl_exec($ch);
+	curl_setopt($ch, CURLOPT_URL, $apiUrl);
+	curl_setopt($ch, CURLOPT_POST, 1);
+	curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Set this to true if you have a valid SSL certificate
 
-// Check for cURL errors
-if (curl_errno($ch)) {
-    echo 'cURL Error: ' . curl_error($ch);
-}
+	$response = curl_exec($ch);
 
-// Close cURL session
-curl_close($ch);
+	if (curl_errno($ch)) {
+		echo 'cURL Error: ' . curl_error($ch);
+	}
 
-// Display the API response
-$decoded_response = json_decode($response, true);
+	// Close cURL session
+	curl_close($ch);
 
-foreach($decoded_response["rows"] as $prod){
-	// that's CRUD object
-	newProductAdd($prod);
-}
+	$decoded_response = json_decode($response, true);
+
+	foreach($decoded_response["rows"] as $prod) newProductAdd($prod);
 
 }
-// print_r($decoded_response["rows"][1]);
+
 function newProductAdd($product){
 
-// Replace these values with your own product details
-$productTitle = $product["name"];
-$productDescription = '-';
-$productPrice = $product["price"];
-$productSKU = $product["id_product"];
-$productCategoryIds = array(1); // Replace with the category IDs the product belongs to
+	$productTitle = $product["name"];
+	$productDescription = '-';
+	$productPrice = $product["price"];
+	$productSKU = $product["id_product"];
+	$productCategoryIds = array(1);
+	$imageFilePath = $product["image_path"];
 
-// Insert product as a post
-global $wpdb;
+	global $wpdb;
 
-$wpdb->insert(
-	$wpdb->posts,
-	array(
-		'post_title' => $productTitle,
-		'post_content' => $productDescription,
-		'post_status' => 'publish',
-		'post_type' => 'product',
-	)
-);
+	$wpdb->insert(
+		$wpdb->posts,
+		array(
+			'post_title' => $productTitle,
+			'post_content' => $productDescription,
+			'post_status' => 'publish',
+			'post_type' => 'product',
+		)
+	);
 
-$productID = $wpdb->insert_id;
+	$productID = $wpdb->insert_id;
 
-// Add product meta data
-update_post_meta($productID, '_regular_price', $productPrice);
-update_post_meta($productID, '_price', $productPrice);
-update_post_meta($productID, '_sku', $productSKU);
+	update_post_meta($productID, '_regular_price', $productPrice);
+	update_post_meta($productID, '_price', $productPrice);
+	update_post_meta($productID, '_sku', $productSKU);
 
-// Add product categories
-wp_set_post_terms($productID, $productCategoryIds, 'product_cat');
+	wp_set_post_terms($productID, $productCategoryIds, 'product_cat');
 
-echo 'Product added directly to the database. Product ID: ' . $productID;
+	$image_id = insertImageToProduct( $imageFilePath);
+	set_post_thumbnail($productID, $image_id);
+
+	echo 'Product added directly to the database. Product ID: ' . $productID;
 
 }
+
+function insertImageToProduct($image_url) {
+
+	if (!empty($image_url)) {
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+
+		$image_name = basename($image_url);
+		$upload_dir = wp_upload_dir();
+		$image_path = $upload_dir['path'] . '/' . $image_name;
+
+		if (copy($image_url, $image_path)) {
+
+			$attachment = array(
+				'post_mime_type' => 'image/jpeg', // Adjust the MIME type if needed
+				'post_title'     => sanitize_file_name($image_name),
+				'post_content'   => '',
+				'post_status'    => 'inherit',
+			);
+
+			$attach_id = wp_insert_attachment($attachment, $image_path, $product_id);
+
+			return $attach_id;
+		}
+	}
+}
+
+
 
 function createSlug($str, $delimiter = '-'){
 
@@ -310,6 +275,7 @@ function createSlug($str, $delimiter = '-'){
 	return $slug;
 
 } 
+
 
 function log_sync_activity($message) {
 	$log_file = WP_CONTENT_DIR . '/sync_log.txt';
@@ -322,4 +288,7 @@ function log_sync_activity($message) {
 log_sync_activity('Product X was synchronized successfully.');
 
 // get_products_data();
+// insertImageToProduct(2946, 'http://static.emporiorologion.gr/store/1/DIESEL/DZ4204.jpg');
+// set_post_thumbnail(4894, 4912);
+
 run_products_update_plugin();
