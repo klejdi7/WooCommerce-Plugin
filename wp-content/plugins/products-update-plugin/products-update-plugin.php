@@ -83,6 +83,16 @@ function run_products_update_plugin() {
 
 }
 
+add_action('init', 'scheduleDailyCronJob');
+
+function scheduleDailyCronJob() {
+	if (!wp_next_scheduled('daily_cron_hook')) wp_schedule_event(strtotime('3:00 am'), 'daily', 'daily_cron_hook');
+}
+
+add_action('daily_cron_hook', 'syncCategories');
+add_action('daily_cron_hook', 'syncProducts');
+add_action('daily_cron_hook', 'checkForDuplicates');
+
 function getBrands() {
 
 	$apiUrl = 'https://dev.dropshippingb2b.com/api/';
@@ -112,7 +122,6 @@ function getBrands() {
 		echo 'cURL Error: ' . curl_error($ch);
 	}
 
-	// Close cURL session
 	curl_close($ch);
 
 	$brands_decoded = json_decode($response, true);
@@ -158,7 +167,6 @@ function getProductsByBrandID($id){
 		echo 'cURL Error: ' . curl_error($ch);
 	}
 
-	// Close cURL session
 	curl_close($ch);
 
 	$products_decoded = json_decode($response, true);
@@ -170,16 +178,15 @@ function addCategory($category_name) {
 	$category_slug = sanitize_title($category_name);
 	$category_args = array(
 		'description' => '',
-		'slug'        => $category_slug,
+		'slug'		  => $category_slug,
 	);
 
-	// Check if the category already exists
 	$existing_term = term_exists($category_name, 'product_cat');
 	
 	if (!$existing_term) {
 		$new_category = wp_insert_term($category_name, 'product_cat', $category_args);
 		if (!is_wp_error($new_category)) {
-			return $new_category; // Return the newly added term (term_id, term_taxonomy_id, term_slug)
+			return $new_category;
 		} else {
 			return $new_category->get_error_message();
 		}
@@ -224,7 +231,6 @@ function syncCategories() {
 
 	add_action('init', function() use ($brands) {
 		foreach ($brands["rows"] as $brand) {
-			// Call the function with the desired category name to add it during initialization
 			addCategory($brand["group"]);
 		}
 	});
@@ -235,40 +241,18 @@ function syncProducts() {
 
 	$brands = getBrands();
 
-	add_action('wp_loaded', function() use ($brands) {
-
-		foreach($brands["rows"] as $brand) {
-			$productsByBrand = getProductsByBrandID($brand["id_brand"]);
-
-			foreach($productsByBrand["rows"] as $product){
-				$category = term_exists($brand["group"], 'product_cat');
-				newProductAdd($product, $category);
-			}
-		}
-
-		checkForDuplicates();
-	});
-}
-
-function getAllProductIDs($brands){
-
-	// $brands = getBrands();
-	$allProductIDs = array();
-
 	foreach($brands["rows"] as $brand) {
-
 		$productsByBrand = getProductsByBrandID($brand["id_brand"]);
-		// foreach($productsByBrand["rows"] as $product){
-		if($productsByBrand["num_rows"] > 0) $allProductIDs[] = $productsByBrand;
-		// }
 
+		foreach($productsByBrand["rows"] as $product){
+			$category = term_exists($brand["group"], 'product_cat');
+			newProductAdd($product, $category);
+		}
 	}
 
-	return $allProductIDs;
-}
+	checkForDuplicates();
 
-// $res = getAllProductIDs();
-// print_r($res);die();
+}
 
 function checkProductExists($sku) {
 	$args = array(
@@ -295,7 +279,6 @@ function checkProductExists($sku) {
 
 function newProductAdd($productData, $category){
 
-	// print_r($category["term_id"]);die();
 	$productTitle = $productData["name"];
 	$productDescription = '-';
 	$productPrice = $productData["price"];
@@ -304,10 +287,8 @@ function newProductAdd($productData, $category){
 	$productSlug = sanitize_title($productTitle);
 	$imageFilePath = $productData["image_path"];
 
-	  // Check if the product already exists based on SKU or other unique identifiers.
 	$product_id = wc_get_product_id_by_sku($productSKU);
 
-	// If the product exists, update its information; otherwise, create a new product.
 	if ($product_id) $product = wc_get_product($product_id);
 	else $product = new WC_Product();
 
@@ -327,41 +308,6 @@ function newProductAdd($productData, $category){
 	echo 'Product added directly to the database. Product ID: ';
 
 }
-
-// $result = wp_set_post_terms(5910, array(21), 'product_cat', true);
-// Function to delete all products
-function delete_all_products() {
-    $args = array(
-        'post_type' => 'product',
-        'posts_per_page' => -1, // Retrieve all products
-    );
-
-    $products = get_posts($args);
-
-    if ($products) {
-        foreach ($products as $product) {
-            wp_delete_post($product->ID, true); // Force delete to bypass trash
-        }
-
-        echo 'All products have been deleted successfully.';
-    } else {
-        echo 'No products found.';
-    }
-}
-
-// Call the function to delete all products
-// delete_all_products();
-function assign_product_to_category() {
-    $result = wp_set_post_terms(5910, array(21), 'product_cat', true);
-
-    if (!is_wp_error($result)) {
-        echo 'Product has been successfully assigned to the category.';
-    } else {
-        echo 'Error assigning product to category: ' . $result->get_error_message();
-    }
-	die();
-}
-// add_action('init', 'assign_product_to_category');
 
 function insertImageToProduct($image_url) {
 
@@ -390,16 +336,6 @@ function insertImageToProduct($image_url) {
 	}
 }
 
-
-
-function createSlug($str, $delimiter = '-'){
-
-	$slug = strtolower(trim(preg_replace('/[\s-]+/', $delimiter, preg_replace('/[^A-Za-z0-9-]+/', $delimiter, preg_replace('/[&]/', 'and', preg_replace('/[\']/', '', iconv('UTF-8', 'ASCII//TRANSLIT', $str))))), $delimiter));
-	return $slug;
-
-} 
-
-
 function log_sync_activity($message) {
 	$log_file = WP_CONTENT_DIR . '/sync_log.txt';
 	$current_time = current_time('mysql');
@@ -409,11 +345,5 @@ function log_sync_activity($message) {
 
 // Usage example:
 log_sync_activity('Product X was synchronized successfully.');
-
-// get_products_data();
-// insertImageToProduct(2946, 'http://static.emporiorologion.gr/store/1/DIESEL/DZ4204.jpg');
-// set_post_thumbnail(4894, 4912);
-// syncAllProducts();
-
 
 run_products_update_plugin();
