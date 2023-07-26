@@ -83,27 +83,6 @@ function run_products_update_plugin() {
 
 }
 
-// add_filter( 'cron_schedules', 'isa_add_every_three_minutes' );
-// function isa_add_every_three_minutes( $schedules ) {
-//     $schedules['every_three_minutes'] = array(
-//             'interval'  => 10,
-//             'display'   => __( 'Every 3 Minutes', 'textdomain' )
-//     );
-//     return $schedules;
-// }
-
-// // Schedule an action if it's not already scheduled
-// if ( ! wp_next_scheduled( 'isa_add_every_three_minutes' ) ) {
-//     wp_schedule_event( time(), 'every_three_minutes', 'isa_add_every_three_minutes' );
-// }
-
-// // Hook into that action that'll fire every three minutes
-// add_action( 'isa_add_every_three_minutes', 'syncProducts' );
-// function every_three_minutes_event_func() {
-// 	print_r("3 minutes");die();
-// }
-
-
 function getBrands() {
 
 	$apiUrl = 'https://dev.dropshippingb2b.com/api/';
@@ -140,41 +119,6 @@ function getBrands() {
 
 	return $brands_decoded;
 	
-}
-
-function syncDeletedProducts($productIDs) {
-	print_r($productIDs);die();
-	// Get all product IDs from WooCommerce
-	// $args = array(
-	// 	'post_type' => 'product',
-	// 	'fields' => 'ids',
-	// 	'posts_per_page' => -1,
-	// 	'meta_key' => '_sku',
-	// 	'meta_compare' => 'EXISTS',
-	// );
-
-	// $woo_product_ids = get_posts($args);
-
-	// // Get the SKUs for the existing products in WooCommerce
-	// $existing_skus = array();
-	// foreach ($woo_product_ids as $product_id) {
-	// 	$existing_skus[] = get_post_meta($product_id, '_sku', true);
-	// }
-
-	// // Identify deleted products (present in WooCommerce but not in the API data)
-	// $deleted_skus = array_diff($existing_skus, $productIDs);
-
-	// // Loop through the deleted product SKUs and delete the corresponding products
-	// foreach ($deleted_skus as $deleted_sku) {
-	// 	$product_id = wc_get_product_id_by_sku($deleted_sku);
-	// 	if ($product_id) {
-	// 		wp_delete_post($product_id, true);
-	// 		echo "Deleted";
-	// 	}
-	// }
-
-	// // Flush rewrite rules to regenerate permalinks after deleting products
-	// flush_rewrite_rules();
 }
 
 function getProductsByBrandID($id){
@@ -244,7 +188,36 @@ function addCategory($category_name) {
 	}
 }
 
-// addCategoryHook("ele");
+function checkForDuplicates() {
+
+	$duplicateProducts = array();
+	$allProducts = get_posts(array('post_type' => 'product', 'posts_per_page' => -1));
+
+	// Find duplicate SKUs and group them.
+	foreach ($allProducts as $product) {
+		$sku = get_post_meta($product->ID, '_sku', true);
+
+		if (!empty($sku)) {
+			if (!isset($duplicateProducts[$sku])) {
+				$duplicateProducts[$sku] = array();
+			}
+
+			$duplicateProducts[$sku][] = $product->ID;
+		}
+	}
+
+	foreach ($duplicateProducts as $sku => $products) {
+		if (count($products) > 1) {
+			$product_to_keep = array_shift($products);
+
+			foreach ($products as $product_id) {
+				wp_delete_post($product_id, true); 
+			}
+		}
+	}
+
+}
+
 function syncCategories() {
 
 	$brands = getBrands();
@@ -262,28 +235,20 @@ function syncProducts() {
 
 	$brands = getBrands();
 
-	add_action('init', function() use ($brands) {
-
+	add_action('wp_loaded', function() use ($brands) {
 
 		foreach($brands["rows"] as $brand) {
 			$productsByBrand = getProductsByBrandID($brand["id_brand"]);
 
 			foreach($productsByBrand["rows"] as $product){
 				$category = term_exists($brand["group"], 'product_cat');
-				if(!checkProductExists($product["id_product"])) newProductAdd($product, $category);
+				newProductAdd($product, $category);
 			}
-				flush_rewrite_rules();
 		}
 
-		// print_r($allProductIDs);die();
-		// syncDeletedProducts($allProductIDs);
+		checkForDuplicates();
 	});
-
 }
-
-// syncProducts(); 
-
-// syncCategories();
 
 function getAllProductIDs($brands){
 
@@ -328,42 +293,38 @@ function checkProductExists($sku) {
 	return false;
 }
 
-function newProductAdd($product, $category){
+function newProductAdd($productData, $category){
 
 	// print_r($category["term_id"]);die();
-	$productTitle = $product["name"];
+	$productTitle = $productData["name"];
 	$productDescription = '-';
-	$productPrice = $product["price"];
-	$productSKU = $product["id_product"];
-	$productCategoryId = array($category["term_id"]);
+	$productPrice = $productData["price"];
+	$productSKU = $productData["id_product"];
+	$productCategoryID = array($category["term_id"]);
 	$productSlug = sanitize_title($productTitle);
-	$imageFilePath = $product["image_path"];
+	$imageFilePath = $productData["image_path"];
 
-	global $wpdb;
+	  // Check if the product already exists based on SKU or other unique identifiers.
+	$product_id = wc_get_product_id_by_sku($productSKU);
 
-	$wpdb->insert(
-		$wpdb->posts,
-		array(
-			'post_title' => $productTitle,
-			'post_content' => $productDescription,
-			'post_name' => $productSlug,
-			'post_status' => 'publish',
-			'post_type' => 'product',
-		)
-	);
+	// If the product exists, update its information; otherwise, create a new product.
+	if ($product_id) $product = wc_get_product($product_id);
+	else $product = new WC_Product();
 
-	$productID = $wpdb->insert_id;
-
-	update_post_meta($productID, '_regular_price', $productPrice);
-	update_post_meta($productID, '_price', $productPrice);
-	update_post_meta($productID, '_sku', $productSKU);
-
-	wp_set_post_terms($productID, $productCategoryId, 'product_cat', true);
+	$product->set_name($productTitle);
+	$product->set_slug($productSlug);
+	$product->set_sku($productSKU);
+	$product->set_description($productDescription);
+	$product->set_regular_price($productPrice);
 
 	$image_id = insertImageToProduct( $imageFilePath);
-	set_post_thumbnail($productID, $image_id);
+	$product->set_image_id($image_id);
 
-	echo 'Product added directly to the database. Product ID: ' . $productID;
+	if ($productCategoryID) $product->set_category_ids($productCategoryID);
+
+	$product->save();
+
+	echo 'Product added directly to the database. Product ID: ';
 
 }
 
