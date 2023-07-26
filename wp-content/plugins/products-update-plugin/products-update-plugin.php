@@ -343,7 +343,6 @@ function log_sync_activity($message) {
 	file_put_contents($log_file, $log_message, FILE_APPEND | LOCK_EX);
 }
 
-// Usage example:
-log_sync_activity('Product X was synchronized successfully.');
+log_sync_activity('Products synchronized successfully.');
 
 run_products_update_plugin();
